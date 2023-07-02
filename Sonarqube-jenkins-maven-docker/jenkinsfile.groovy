@@ -40,5 +40,14 @@ pipeline{
                 sh 'docker push ngomansible/my_private_repo:latest'
             }
         }
+
+        stage('Deploy App to kubernetes'){
+            steps{
+                script{
+                    kubernetesDeploy (configs: 'deployment.yaml',kubeconfigId: 'k8sConfig')
+                }
+            }
+        }
+
     }
 }
