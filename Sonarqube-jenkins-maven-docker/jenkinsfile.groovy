@@ -1,30 +1,34 @@
 pipeline{
+    agent {label 'label_name'}
+    tools {
+        maven "Maven3"
+    }
     
-    agent {
-        label "Nodes1"
-    }
-    tools{
-        git "git3"
-        maven "Maven3" 
-    }
-   
     stages{
         
-        stage('Checkout code'){
+        stage('Checkout code from git'){
             steps{
-             checkout changelog: false, poll: false, scm: scmGit(branches: [[name: '*/main']], extensions: [], userRemoteConfigs: [[url: 'https://github.com/NgomSysOps/new_devops_pro']])
+                checkout scmGit(branches: [[name: '*/main']], extensions: [], userRemoteConfigs: [[url: 'https://github.com/NgomSysOps/ngom_k8s_project']])
             }
         }
         
-        stage('Build project with maven'){
+        stage('Building Maven project'){
             steps{
                 sh 'mvn clean install'
             }
         }
         
-        stage('building docker image'){
+        stage('Scan code with SonarQube'){
             steps{
-                sh 'docker build -t ngomansible/my_private_repo:v1stable .'
+                withSonarQubeEnv('SonarQube') {
+                    sh 'mvn sonar:sonar'
+                }
+            }
+        }
+        
+        stage('Building docker image'){
+            steps{
+                sh 'docker build -t ngomansible/my_private_repo:latest .'
             }
         }
         
@@ -33,16 +37,17 @@ pipeline{
                 withCredentials([string(credentialsId: 'DockerToken', variable: 'docker_cred')]) {
                    sh 'docker login -u ngomansible -p ${docker_cred}' 
                 }
-                sh 'docker push ngomansible/my_private_repo:v1stable'
+                sh 'docker push ngomansible/my_private_repo:latest'
             }
         }
-        
-        stage('Deploy to kubernetes'){
+
+        stage('Deploy App to kubernetes'){
             steps{
-                withKubeConfig(caCertificate: '', clusterName: '', contextName: '', credentialsId: 'k8s-id', namespace: '', restrictKubeConfigAccess: false, serverUrl: '') {
-                    sh 'kubectl apply -f myDeployment.yml'
+                script{
+                    kubernetesDeploy (configs: 'deployment.yaml',kubeconfigId: 'k8sConfig')
                 }
             }
         }
+
     }
 }
