@@ -1,34 +1,30 @@
 pipeline{
-    agent {label 'label_name'}
-    tools {
-        maven "Maven3"
-    }
     
+    agent {
+        label "Nodes1"
+    }
+    tools{
+        git "git3"
+        maven "Maven3" 
+    }
+   
     stages{
         
-        stage('Checkout code from git'){
+        stage('Checkout code'){
             steps{
-                checkout scmGit(branches: [[name: '*/main']], extensions: [], userRemoteConfigs: [[url: 'https://github.com/NgomSysOps/ngom_k8s_project']])
+             checkout changelog: false, poll: false, scm: scmGit(branches: [[name: '*/main']], extensions: [], userRemoteConfigs: [[url: 'https://github.com/NgomSysOps/new_devops_pro']])
             }
         }
         
-        stage('Building Maven project'){
+        stage('Build project with maven'){
             steps{
                 sh 'mvn clean install'
             }
         }
         
-        stage('Scan code with SonarQube'){
+        stage('building docker image'){
             steps{
-                withSonarQubeEnv('SonarQube') {
-                    sh 'mvn sonar:sonar'
-                }
-            }
-        }
-        
-        stage('Building docker image'){
-            steps{
-                sh 'docker build -t ngomansible/my_private_repo:latest .'
+                sh 'docker build -t ngomansible/my_private_repo:v1stable .'
             }
         }
         
@@ -37,17 +33,16 @@ pipeline{
                 withCredentials([string(credentialsId: 'DockerToken', variable: 'docker_cred')]) {
                    sh 'docker login -u ngomansible -p ${docker_cred}' 
                 }
-                sh 'docker push ngomansible/my_private_repo:latest'
+                sh 'docker push ngomansible/my_private_repo:v1stable'
             }
         }
-
-        stage('Deploy App to kubernetes'){
+        
+        stage('Deploy to kubernetes'){
             steps{
-                script{
-                    kubernetesDeploy (configs: 'myDeployment.yml',kubeconfigId: 'k8sConfig')
+                withKubeConfig(caCertificate: '', clusterName: '', contextName: '', credentialsId: 'k8s-id', namespace: '', restrictKubeConfigAccess: false, serverUrl: '') {
+                    sh 'kubectl apply -f myDeployment.yml'
                 }
             }
         }
-
     }
 }
